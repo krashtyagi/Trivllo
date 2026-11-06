@@ -1,0 +1,740 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import {
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Loader2,
+  Eye,
+  ArrowUpDown,
+  Maximize2,
+  Star,
+  ImageIcon,
+  LayoutGrid,
+  Save,
+  Trash2,
+  Monitor,
+  Smartphone,
+  CheckCircle2,
+  AlertCircle,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+
+export interface PropertyImageItem {
+  url: string;
+  public_id?: string;
+  resource_type?: string;
+  [key: string]: any;
+}
+
+interface AdminPropertyImageArrangerProps {
+  images: (PropertyImageItem | string)[];
+  onSave?: (imagesToSave: PropertyImageItem[]) => Promise<void> | void;
+  saving?: boolean;
+  propertyName?: string;
+  className?: string;
+}
+
+// Normalize incoming images (strings or objects) into a uniform PropertyImageItem[]
+const normalizeImages = (rawList: (PropertyImageItem | string)[]): PropertyImageItem[] => {
+  if (!Array.isArray(rawList)) return [];
+  const results: PropertyImageItem[] = [];
+  rawList.forEach((item, index) => {
+    if (typeof item === "string") {
+      results.push({
+        url: item,
+        public_id: `img-${index}-${item.split("/").pop()?.slice(0, 16) || "photo"}`,
+      });
+    } else if (item && typeof item === "object" && item.url) {
+      results.push({
+        ...item,
+        url: item.url,
+        public_id: item.public_id || `img-${index}-${item.url.split("/").pop()?.slice(0, 16) || "photo"}`,
+      });
+    }
+  });
+  return results;
+};
+
+export function AdminPropertyImageArranger({
+  images: initialImagesRaw,
+  onSave,
+  saving = false,
+  propertyName = "Property",
+  className,
+}: AdminPropertyImageArrangerProps) {
+  const [images, setImages] = useState<PropertyImageItem[]>(() =>
+    normalizeImages(initialImagesRaw),
+  );
+  const [originalImages, setOriginalImages] = useState<PropertyImageItem[]>(() =>
+    normalizeImages(initialImagesRaw),
+  );
+  const [activeTab, setActiveTab] = useState<"arrange" | "preview">("arrange");
+  const [previewVariant, setPreviewVariant] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [selectedImageModal, setSelectedImageModal] = useState<string | null>(
+    null,
+  );
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Sync state if external images change and user hasn't made dirty edits
+  useEffect(() => {
+    const normalized = normalizeImages(initialImagesRaw);
+    setOriginalImages(normalized);
+    if (!hasChanges) {
+      setImages(normalized);
+    }
+  }, [initialImagesRaw, hasChanges]);
+
+  // Handle reorder updates
+  const handleImagesChange = (updated: PropertyImageItem[]) => {
+    setHasChanges(true);
+    setImages(updated);
+  };
+
+  // Reorder helper: moves item from `fromIndex` to `toIndex`
+  const moveImageToIndex = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= images.length || fromIndex === toIndex) return;
+    const updated = [...images];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    handleImagesChange(updated);
+  };
+
+  // 1-Click Promote to Cover (Index 0)
+  const makeCoverPhoto = (fromIndex: number) => {
+    if (fromIndex === 0) return;
+    moveImageToIndex(fromIndex, 0);
+  };
+
+  // Remove single image
+  const handleRemoveImage = (index: number) => {
+    const updated = images.filter((_, i) => i !== index);
+    handleImagesChange(updated);
+  };
+
+  // Revert back to original order
+  const handleReset = () => {
+    setImages(originalImages);
+    setHasChanges(false);
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+      moveImageToIndex(draggedIndex, targetIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Save handler that resets the dirty state on success
+  const handleSaveClick = async () => {
+    if (!onSave) return;
+    try {
+      await onSave(images);
+      setHasChanges(false);
+      setOriginalImages(images);
+    } catch {
+      // error handled in caller
+    }
+  };
+
+  // Helper labels matching the public showcase layout
+  const getSlotInfo = (index: number) => {
+    if (index === 0) {
+      return {
+        label: "Cover Photo",
+        badgeClass: "bg-black/80 text-white border-white/20 font-semibold",
+        description: "Primary hero banner & card thumbnail",
+        isCover: true,
+      };
+    }
+    if (index <= 4) {
+      return {
+        label: `Grid ${index}`,
+        badgeClass: "bg-black/60 text-white/90 border-white/10 font-medium",
+        description: `Showcase 2×2 grid slot ${index}`,
+        isCover: false,
+      };
+    }
+    return {
+      label: `Gallery ${index + 1}`,
+      badgeClass: "bg-black/50 text-white/80 border-white/10 font-normal",
+      description: "Full photo drawer view",
+      isCover: false,
+    };
+  };
+
+  const featuredImage = images[0]?.url;
+  const remainingCount = Math.max(0, images.length - 5);
+
+  return (
+    <Card
+      className={cn(
+        "rounded-2xl border border-border/80 shadow-sm overflow-hidden bg-card/60 backdrop-blur-sm",
+        className,
+      )}
+    >
+      {/* ── CARD HEADER ──────────────────────────────────────────────── */}
+      <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center flex-wrap gap-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-foreground">
+                <ImageIcon className="h-4 w-4 text-primary shrink-0" />
+                <span>Property Gallery Photos</span>
+              </CardTitle>
+              {images.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-[11px] h-5 px-2 font-mono border-border/70"
+                >
+                  {images.length} {images.length === 1 ? "photo" : "photos"}
+                </Badge>
+              )}
+              {hasChanges && (
+                <Badge className="text-[10px] h-5 px-2 bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30 font-medium animate-pulse">
+                  Unsaved Changes
+                </Badge>
+              )}
+            </div>
+            <CardDescription className="text-xs text-muted-foreground">
+              Position #1 is your public Cover Photo. Positions #2–#5 fill the main showcase grid.
+            </CardDescription>
+          </div>
+
+          <div className="flex items-center flex-wrap gap-2">
+            {/* View Switcher Tabs */}
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as any)}
+              className="w-auto"
+            >
+              <TabsList className="h-8 bg-muted/60 p-0.5 border border-border/60">
+                <TabsTrigger
+                  value="arrange"
+                  className="text-xs px-3 h-7 gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  Arrange
+                </TabsTrigger>
+                <TabsTrigger
+                  value="preview"
+                  className="text-xs px-3 h-7 gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  Preview
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Reset Order Button */}
+            {hasChanges && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                disabled={saving}
+                className="h-8 text-xs gap-1.5 border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground"
+                title="Discard reordering and revert"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Reset</span>
+              </Button>
+            )}
+
+            {/* Save Button */}
+            {onSave && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveClick}
+                disabled={saving || (!hasChanges && images.length === originalImages.length)}
+                className={cn(
+                  "h-8 text-xs gap-1.5 font-medium transition-all shadow-sm cursor-pointer",
+                  hasChanges
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary/25"
+                    : "bg-primary/80 text-primary-foreground hover:bg-primary/90 opacity-90",
+                )}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Save Photos</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-4 sm:p-5 pt-4">
+        {activeTab === "arrange" ? (
+          /* ── ARRANGE & REORDER VIEW ──────────────────────────────── */
+          <div className="space-y-4">
+            {/* Guide strip */}
+            <div className="p-3 bg-muted/30 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AlertCircle className="h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  <strong>Tip:</strong> Drag cards or use arrows to change photo order. The first image is always shown as the main hero cover on your listing.
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border font-medium text-foreground shadow-2xs">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  #1 Cover
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border shadow-2xs">
+                  #2–#5 Grid
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-background border border-border shadow-2xs">
+                  #6+ Gallery
+                </span>
+              </div>
+            </div>
+
+            {/* Empty State */}
+            {images.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-border/80 bg-muted/10 p-10 text-center transition-all">
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+                  <ImageIcon className="h-6 w-6" />
+                </div>
+                <h4 className="text-sm font-semibold mb-1 text-foreground">
+                  No property photos available
+                </h4>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  This property currently has no uploaded gallery photos to arrange.
+                </p>
+              </div>
+            ) : (
+              /* Photo Cards Grid */
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                {images.map((img, index) => {
+                  const slot = getSlotInfo(index);
+                  const isDragging = draggedIndex === index;
+                  const isOver = dragOverIndex === index;
+
+                  return (
+                    <div
+                      key={img.public_id || `${img.url}-${index}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDrop={(e) => handleDrop(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={cn(
+                        "group relative rounded-xl border overflow-hidden bg-card transition-all duration-200 select-none shadow-xs",
+                        slot.isCover
+                          ? "border-primary/60 shadow-sm ring-1 ring-primary/25"
+                          : "border-border/70 hover:border-border",
+                        isDragging && "opacity-40 scale-95",
+                        isOver && "border-primary ring-2 ring-primary/30",
+                      )}
+                    >
+                      {/* Image Thumbnail Container */}
+                      <div className="relative aspect-[16/10] bg-muted/60 overflow-hidden">
+                        <img
+                          src={img.url}
+                          alt={`Property photo ${index + 1}`}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                        />
+
+                        {/* Drag Handle Overlay */}
+                        <div
+                          className="absolute top-2 left-2 cursor-grab active:cursor-grabbing p-1.5 rounded-md bg-black/65 backdrop-blur-sm text-white/90 hover:text-white hover:bg-black/80 transition-colors shadow-sm"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="h-3.5 w-3.5" />
+                        </div>
+
+                        {/* Slot Badge */}
+                        <div className="absolute top-2 right-2">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] backdrop-blur-sm border shadow-sm",
+                              slot.isCover
+                                ? "bg-black/85 text-white border-white/20 font-semibold"
+                                : "bg-black/65 text-white/95 border-white/10 font-medium",
+                            )}
+                          >
+                            {slot.isCover && (
+                              <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                            )}
+                            {slot.label}
+                          </span>
+                        </div>
+
+                        {/* Quick View Button */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImageModal(img.url)}
+                          className="absolute bottom-2 left-2 p-1.5 rounded-md bg-black/65 backdrop-blur-sm text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/85 cursor-pointer shadow-sm"
+                          title="View enlarged"
+                        >
+                          <Maximize2 className="h-3 w-3" />
+                        </button>
+
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(index)}
+                          className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/65 backdrop-blur-sm text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-600 cursor-pointer shadow-sm"
+                          title="Remove from gallery"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {/* Card Bottom Controls */}
+                      <div className="p-2.5 flex items-center justify-between border-t border-border/50 bg-background/80 text-xs">
+                        {/* 1-Click Set as Cover */}
+                        {!slot.isCover ? (
+                          <button
+                            type="button"
+                            onClick={() => makeCoverPhoto(index)}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors cursor-pointer font-medium"
+                            title="Make this the main cover photo"
+                          >
+                            <Star className="h-3 w-3" />
+                            <span>Set as Cover</span>
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
+                            <Star className="h-3 w-3 fill-primary" />
+                            <span>Primary Cover</span>
+                          </span>
+                        )}
+
+                        {/* Position Move Arrows */}
+                        <div className="flex items-center gap-1 ml-auto">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => moveImageToIndex(index, index - 1)}
+                            className="p-1 rounded hover:bg-muted disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                            title="Move position left"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          <span className="text-[11px] font-mono font-medium text-muted-foreground min-w-[1.5ch] text-center">
+                            {index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={index === images.length - 1}
+                            onClick={() => moveImageToIndex(index, index + 1)}
+                            className="p-1 rounded hover:bg-muted disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                            title="Move position right"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ── PREVIEW VIEW (Matches frontend hotel showcase layout) ── */
+          <div className="space-y-4">
+            <div className="px-3 py-2 bg-muted/40 border border-border/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                <span>
+                  This is the exact layout guests see on public listings for <strong>{propertyName}</strong>.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center bg-background rounded-lg border border-border/60 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewVariant("desktop")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer",
+                      previewVariant === "desktop"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Monitor className="h-3 w-3" />
+                    Desktop Grid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewVariant("mobile")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer",
+                      previewVariant === "mobile"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Smartphone className="h-3 w-3" />
+                    Mobile Layout
+                  </button>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("arrange")}
+                  className="h-7 text-xs gap-1.5 cursor-pointer"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  Rearrange
+                </Button>
+              </div>
+            </div>
+
+            {/* Desktop Preview: 2-Column (Cover on left, 2x2 grid on right) */}
+            {previewVariant === "desktop" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 rounded-xl md:rounded-2xl overflow-hidden border border-border/60 bg-muted/20">
+                {/* Left Column: Big Featured Cover Photo */}
+                <div
+                  className="relative aspect-[4/3] md:aspect-auto md:h-[380px] overflow-hidden bg-muted cursor-pointer group"
+                  onClick={() =>
+                    featuredImage && setSelectedImageModal(featuredImage)
+                  }
+                >
+                  {featuredImage ? (
+                    <>
+                      <img
+                        src={featuredImage}
+                        alt="Featured property view"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-sm text-white px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1.5 shadow-sm">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        Cover Photo (Slot #1)
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-xs gap-2 p-6 text-center">
+                      <ImageIcon className="h-8 w-8 opacity-30" />
+                      <span>No photos to preview</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: 2×2 Grid */}
+                <div className="grid grid-cols-2 grid-rows-2 gap-1.5 h-[280px] md:h-[380px]">
+                  {[1, 2, 3, 4].map((slotIdx) => {
+                    const img = images[slotIdx];
+                    const isLastVisible = slotIdx === 4;
+                    const hasMore = remainingCount > 0;
+
+                    return (
+                      <div
+                        key={slotIdx}
+                        className="relative w-full h-full overflow-hidden bg-muted cursor-pointer group"
+                        onClick={() => img && setSelectedImageModal(img.url)}
+                      >
+                        {img ? (
+                          <>
+                            <img
+                              src={img.url}
+                              alt={`Property view ${slotIdx + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute top-2 left-2 bg-black/65 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[10px] font-mono">
+                              Slot #{slotIdx + 1}
+                            </div>
+
+                            {/* +X more overlay on 4th grid image if more photos exist */}
+                            {isLastVisible && hasMore && (
+                              <div className="absolute inset-0 bg-black/65 hover:bg-black/55 transition-colors flex flex-col items-center justify-center text-white">
+                                <LayoutGrid className="h-5 w-5 mb-1 opacity-90" />
+                                <span className="text-sm font-semibold">
+                                  +{remainingCount} more
+                                </span>
+                                <span className="text-[10px] text-white/80">
+                                  View all photos
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground text-[11px] gap-1 p-2 text-center bg-muted/40">
+                            <ImageIcon className="h-4 w-4 opacity-30" />
+                            <span>Grid Slot #{slotIdx + 1}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Mobile Preview: 16:9 main image on top, 4 thumbs below */
+              <div className="max-w-md mx-auto grid grid-cols-1 gap-1.5 rounded-xl overflow-hidden border border-border/60 bg-muted/20 p-2">
+                <div
+                  className="relative w-full aspect-[16/9] overflow-hidden rounded-lg bg-muted cursor-pointer"
+                  onClick={() =>
+                    featuredImage && setSelectedImageModal(featuredImage)
+                  }
+                >
+                  {featuredImage ? (
+                    <>
+                      <img
+                        src={featuredImage}
+                        alt="Mobile cover view"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 shadow-sm">
+                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                        Cover
+                      </div>
+                      {images.length > 1 && (
+                        <div className="absolute bottom-2 right-2 bg-black/75 text-white text-[11px] px-2 py-0.5 rounded-md font-medium">
+                          +{images.length - 1} more
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
+                      No cover photo
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[1, 2, 3, 4].map((slotIdx) => {
+                    const img = images[slotIdx];
+                    return (
+                      <div
+                        key={slotIdx}
+                        className="relative aspect-video rounded-md overflow-hidden bg-muted cursor-pointer"
+                        onClick={() => img && setSelectedImageModal(img.url)}
+                      >
+                        {img ? (
+                          <img
+                            src={img.url}
+                            alt={`Thumb ${slotIdx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground/60">
+                            #{slotIdx + 1}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Additional gallery images strip (Slots 6+) */}
+            {images.length > 5 && (
+              <div className="p-3 bg-muted/20 border border-border/50 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">
+                    Full Gallery Drawer ({images.length - 5} additional photos)
+                  </span>
+                  <span>
+                    These appear when guests click &quot;+{remainingCount} more&quot;
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-1">
+                  {images.slice(5).map((img, extraIdx) => (
+                    <div
+                      key={extraIdx}
+                      onClick={() => setSelectedImageModal(img.url)}
+                      className="group relative h-16 w-24 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted cursor-pointer hover:border-primary transition-colors"
+                    >
+                      <img
+                        src={img.url}
+                        alt={`Gallery photo ${extraIdx + 6}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1.5 py-0.2 rounded font-mono font-medium">
+                        #{extraIdx + 6}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Enlarged Lightbox Modal */}
+      {selectedImageModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setSelectedImageModal(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden bg-background shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setSelectedImageModal(null)}
+              className="absolute top-3 right-3 p-2 rounded-full bg-black/70 hover:bg-black text-white z-10 transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <img
+              src={selectedImageModal}
+              alt="Enlarged preview"
+              className="max-h-[85vh] w-auto object-contain"
+            />
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
