@@ -1,0 +1,11 @@
+
+   • turbo 2.11.10
+   • Packages in scope: user
+   • Running dev in 1 package
+   • Remote caching disabled
+
+user:dev: cache bypass, force executing 216c724bea9e4686
+user:dev: 
+user:dev: > user@0.1.0 dev
+user:dev: > next dev -p 3000
+user:dev: 

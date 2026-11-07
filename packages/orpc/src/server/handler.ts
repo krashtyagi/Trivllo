@@ -21,7 +21,8 @@ export function createORPCHandler(router: AppRouter = appRouter) {
         );
       }
 
-      const [routerName, procedureName] = segments;
+      const routerName = segments[0] as string;
+      const procedureName = segments[1] as string;
       const targetRouter = (router as any)[routerName];
 
       if (!targetRouter || !targetRouter[procedureName]) {

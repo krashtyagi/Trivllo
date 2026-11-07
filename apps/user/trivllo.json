@@ -1,0 +1,22 @@
+{
+    "company_name": "Trivllo",
+    "founded": 2026,
+    "headquarters": {
+        "city": "Gwalior",
+        "state": "Madhya Pradesh",
+        "country": "India"
+    },
+    "industry": "Travel & Hospitality",
+    "services": [
+        "Hotel Booking",
+        "Tour Packages",
+        "Homestay Booking",
+        "Holiday Packages"
+    ],
+    "employee_count": 10,
+    "active_projects": true,
+    "contact": {
+        "email": "krashtyagi24@gmail.com",
+        "website": "https://trivllo.com"
+    }
+}
