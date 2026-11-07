@@ -15,6 +15,7 @@ export { default as CabService } from "./models/cabService.model";
 export { default as Category } from "./models/category.model";
 export { default as DeletedProperty } from "./models/deletedProperty.model";
 export { default as Favorite } from "./models/favorite.model";
+export { default as GenericBooking } from "./models/genericBooking.model";
 export { default as Hotel } from "./models/hotel.model";
 export { default as Invitation } from "./models/invitation.model";
 export { default as Media } from "./models/media.model";

@@ -40,9 +40,9 @@ export const blogRouter = {
   getPostBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input }) => {
-      const post = await Post.findOne({ slug: input.slug, status: "published" })
-        .populate("category", "name slug")
-        .populate("author", "name avatar bio")
+      const post: any = await Post.findOne({ slug: input.slug, status: "PUBLISHED" } as any)
+        .populate("categories", "name slug")
+        .populate("authorId", "name avatar bio")
         .lean();
 
       if (!post) {
@@ -50,7 +50,7 @@ export const blogRouter = {
       }
 
       // Increment views asynchronously
-      await Post.updateOne({ _id: post._id }, { $inc: { views: 1 } });
+      await Post.updateOne({ _id: post._id } as any, { $inc: { viewsCount: 1 } });
 
       return post;
     }),
@@ -98,10 +98,10 @@ export const blogRouter = {
 
       const post = await Post.create({
         ...input,
-        author: input.authorId || ctx.user.id,
-        category: input.categoryId,
+        authorId: input.authorId || ctx.user.id,
+        categories: input.categoryId ? [input.categoryId] : [],
         publishedAt: input.status === "published" ? new Date() : undefined,
-      });
+      } as any);
 
       return { success: true, post };
     }),
@@ -110,26 +110,26 @@ export const blogRouter = {
     .input(UpdateBlogPostSchema)
     .mutation(async ({ input, ctx }) => {
       const { id, revisionNote, ...data } = input;
-      const post = await Post.findById(id);
+      const post = await Post.findById(id) as any;
 
       if (!post) {
         throw new ORPCError("Post not found", "NOT_FOUND");
       }
 
       // Authors can only edit their own draft/rejected posts
-      if (ctx.employeeRole === "blog_author" && post.author?.toString() !== ctx.user.id) {
+      if (ctx.employeeRole === "blog_author" && post.authorId?.toString() !== ctx.user.id) {
         throw new ORPCError("You can only edit your own posts", "FORBIDDEN");
       }
 
       // Create a revision snapshot before updating
       if (revisionNote) {
         await Revision.create({
-          post: id,
+          postId: id,
           content: post.content,
           title: post.title,
           editor: ctx.user.id,
           note: revisionNote,
-        });
+        } as any);
       }
 
       const updated = await Post.findByIdAndUpdate(

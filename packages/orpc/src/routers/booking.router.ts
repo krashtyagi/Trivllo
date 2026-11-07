@@ -26,16 +26,20 @@ export const bookingRouter = {
 
       const totalAmount = roomType.basePrice * input.numberOfRooms * nights;
 
-      const booking = await Booking.create({
+      const booking: any = await Booking.create({
         userId: ctx.user.id,
         hotelId: input.hotelId,
         roomTypeId: input.roomTypeId,
-        checkInDate: checkIn,
-        checkOutDate: checkOut,
-        numberOfRooms: input.numberOfRooms,
+        bookingReference: "BK-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        checkIn,
+        checkOut,
+        nights,
+        roomsBooked: input.numberOfRooms,
         guests: input.guests,
         primaryGuest: input.primaryGuest,
-        specialRequests: input.specialRequests,
+        specialRequest: input.specialRequests,
+        pricePerNight: roomType.basePrice,
+        taxAmount: 0,
         totalAmount,
         status: "pending",
       });

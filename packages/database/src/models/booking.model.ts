@@ -1,209 +1,220 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
-export interface IParticipant {
-  name?: string;
-  age?: number;
-  gender?: "male" | "female" | "other";
-  weight?: number;
-}
-
-export interface IGenericBookingDuration {
-  startDate?: Date;
-  endDate?: Date;
-  totalDays?: number;
-}
-
-export interface IPrimaryCustomer {
+export interface IGuest {
   firstName: string;
-  lastName?: string;
+  lastName: string;
   email: string;
   phoneNumber: string;
 }
 
-export interface IPricingSnapshot {
-  baseAmount: number;
+export interface IAdditionalGuest {
+  firstName: string;
+  lastName: string;
+}
+
+export interface IGuestCount {
+  adults: number;
+  children: number;
+}
+
+export interface IBooking extends Document {
+  userId?: Types.ObjectId | null;
+  hotelId: Types.ObjectId;
+  roomTypeId: Types.ObjectId;
+  bookingReference: string;
+  checkIn: Date;
+  checkOut: Date;
+  nights: number;
+  primaryGuest: IGuest;
+  additionalGuests: IAdditionalGuest[];
+  guests: IGuestCount;
+  roomsBooked: number;
+  pricePerNight: number;
   taxAmount: number;
-  taxPercentage: number;
+  cleaningFee: number;
   discountAmount: number;
   totalAmount: number;
-}
-
-export interface IServiceSnapshot {
-  title?: string;
-  type?: string;
-  price?: number;
-  vendorId?: Types.ObjectId;
-  extra?: Record<string, any>;
-}
-
-export interface IGenericBooking extends Document {
-  userId?: Types.ObjectId;
-  vendorId: Types.ObjectId;
-  serviceType: "adventure" | "cab" | "tour" | "bike";
-  serviceId: Types.ObjectId;
-  bookingReference: string;
-  bookingDate: Date;
-  timeSlot?: string;
-  duration?: IGenericBookingDuration;
-  primaryCustomer: IPrimaryCustomer;
-  participants: IParticipant[];
-  meta?: Record<string, any>;
-  extraInfo?: Record<string, any>;
-  pricing: IPricingSnapshot;
-  serviceSnapshot?: IServiceSnapshot;
-  quantity: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status:
+    | "pending"
+    | "confirmed"
+    | "checked_in"
+    | "staying"
+    | "checked_out"
+    | "completed"
+    | "cancellation_requested"
+    | "cancelled";
+  roomNumber: string;
   paymentStatus: "pending" | "paid" | "failed" | "refunded";
   paymentId?: Types.ObjectId;
+  refundPercentage: number;
   refundAmount: number;
-  refundStatus: "none" | "pending" | "processed" | "failed";
-  specialRequest?: string;
+  refundStatus: "none" | "pending" | "approved" | "rejected" | "processed";
+  refundRequestedAt?: Date;
+  refundProcessedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
+  policyApplied?: string;
+  totalTax?: number;
+  actualCheckInAt?: Date;
+  actualCheckOutAt?: Date;
+  specialRequest?: string;
   expiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const participantSchema = new Schema<IParticipant>(
-  {
-    name: { type: String, trim: true },
-    age: { type: Number },
-    gender: {
-      type: String,
-      enum: ["male", "female", "other"],
-    },
-    weight: { type: Number }, // optional (adventure use)
-  },
-  { _id: false },
-);
-
-const bookingSchema = new Schema<IGenericBooking>(
+const bookingSchema = new Schema<IBooking>(
   {
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      index: true,
     },
 
-    vendorId: {
+    hotelId: {
       type: Schema.Types.ObjectId,
-      ref: "Vendor",
+      ref: "Hotel",
       required: true,
-      index: true,
     },
 
-    serviceType: {
-      type: String,
-      enum: ["adventure", "cab", "tour", "bike"],
-      required: true,
-      index: true,
-    },
-
-    serviceId: {
+    roomTypeId: {
       type: Schema.Types.ObjectId,
+      ref: "RoomType",
       required: true,
-      index: true,
     },
 
     bookingReference: {
       type: String,
       unique: true,
       required: true,
-      index: true,
     },
-    bookingDate: {
+
+    checkIn: {
       type: Date,
       required: true,
-      index: true,
     },
 
-    timeSlot: {
-      type: String, //adventure specific
+    checkOut: {
+      type: Date,
+      required: true,
     },
 
-    // bike & tour specific
-    duration: {
-      startDate: Date,
-      endDate: Date,
-      totalDays: Number,
+    nights: {
+      type: Number,
+      required: true,
     },
 
-    primaryCustomer: {
-      firstName: { type: String, required: true, trim: true },
-      lastName: { type: String, trim: true },
+    primaryGuest: {
+      firstName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      lastName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
       email: {
         type: String,
         required: true,
         lowercase: true,
         trim: true,
       },
-      phoneNumber: { type: String, required: true, trim: true },
-    },
-
-    //Participants (Dynamic)
-    participants: {
-      type: [participantSchema],
-      default: [],
-    },
-
-    //Dynamic Data
-    meta: {
-      type: Object,
-      default: {},
-    },
-
-    extraInfo: {
-      type: Object,
-      default: {},
-    },
-
-    //Pricing Snapshot
-    pricing: {
-      baseAmount: { type: Number, required: true },
-      taxAmount: { type: Number, default: 0 },
-      taxPercentage: { type: Number, default: 0 },
-      discountAmount: { type: Number, default: 0 },
-      totalAmount: { type: Number, required: true },
-    },
-
-    serviceSnapshot: {
-      title: { type: String },
-      type: { type: String },
-      price: { type: Number },
-      vendorId: { type: Schema.Types.ObjectId },
-      extra: {
-        type: Object,
-        default: {},
+      phoneNumber: {
+        type: String,
+        required: true,
+        trim: true,
       },
     },
 
-    // quantity meaning:
-    // adventure → participants
-    // bike → days
-    // tour → people
-    // cab → 1
-    quantity: {
+    additionalGuests: {
+      type: [
+        {
+          firstName: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          lastName: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+        },
+      ],
+      default: [],
+    },
+
+    guests: {
+      adults: { type: Number, required: true },
+      children: { type: Number, default: 0 },
+    },
+
+    roomsBooked: {
       type: Number,
       default: 1,
     },
+
+    pricePerNight: {
+      type: Number,
+      required: true,
+    },
+
+    taxAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    cleaningFee: {
+      type: Number,
+      default: 0,
+    },
+
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    totalAmount: {
+      type: Number,
+      required: true,
+    },
+
     status: {
       type: String,
-      enum: ["pending", "confirmed", "completed", "cancelled"],
+      enum: [
+        "pending",
+        "confirmed",
+        "checked_in",
+        "staying",
+        "checked_out",
+        "completed",
+        "cancellation_requested",
+        "cancelled",
+      ],
       default: "pending",
       index: true,
+    },
+
+    roomNumber: {
+      type: String,
+      default: "",
     },
 
     paymentStatus: {
       type: String,
       enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
-      index: true,
     },
 
     paymentId: {
       type: Schema.Types.ObjectId,
       ref: "Payment",
+    },
+
+    refundPercentage: {
+      type: Number,
+      default: 0,
     },
 
     refundAmount: {
@@ -213,18 +224,31 @@ const bookingSchema = new Schema<IGenericBooking>(
 
     refundStatus: {
       type: String,
-      enum: ["none", "pending", "processed", "failed"],
+      enum: [
+        "none",
+        "pending", //waiting for admin approval
+        "approved",
+        "rejected",
+        "processed",
+      ],
       default: "none",
     },
+
+    refundRequestedAt: Date,
+    refundProcessedAt: Date,
+
+    cancelledAt: Date,
+    cancellationReason: {
+      type: String,
+      trim: true,
+    },
+    actualCheckInAt: Date,
+    actualCheckOutAt: Date,
 
     specialRequest: {
       type: String,
       trim: true,
     },
-
-    cancelledAt: Date,
-    cancellationReason: { type: String, trim: true },
-
     expiresAt: {
       type: Date,
       index: { expires: "0s" },
@@ -234,14 +258,18 @@ const bookingSchema = new Schema<IGenericBooking>(
 );
 
 bookingSchema.index({ userId: 1, createdAt: -1 });
-bookingSchema.index({ vendorId: 1, createdAt: -1 });
-bookingSchema.index({ serviceId: 1, serviceType: 1 });
-bookingSchema.index({ bookingDate: 1, status: 1 });
-bookingSchema.index({ paymentStatus: 1, status: 1 });
-bookingSchema.index({ bookingReference: 1 });
+bookingSchema.index({ hotelId: 1, checkIn: 1 });
+bookingSchema.index({
+  roomTypeId: 1,
+  checkIn: 1,
+  checkOut: 1,
+  status: 1,
+});
 
-const GenericBooking: Model<IGenericBooking> = mongoose.model<IGenericBooking>("GenericBooking", bookingSchema);
+const Booking: Model<IBooking> =
+  (mongoose.models.Booking as Model<IBooking>) ||
+  mongoose.model<IBooking>("Booking", bookingSchema);
 
-export default GenericBooking;
-export { GenericBooking };
+export default Booking;
+export { Booking };
 

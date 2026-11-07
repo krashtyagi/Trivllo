@@ -18,8 +18,8 @@ export const userRouter = {
     }),
 
   getFavorites: authProcedure.query(async ({ ctx }) => {
-    const favorites = await Favorite.find({ userId: ctx.user.id })
-      .populate("hotelId")
+    const favorites = await Favorite.find({ user: ctx.user.id, itemType: "hotel" })
+      .populate("itemId")
       .lean();
     return favorites;
   }),
@@ -27,12 +27,12 @@ export const userRouter = {
   toggleFavorite: authProcedure
     .input(z.object({ hotelId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const existing = await Favorite.findOne({ userId: ctx.user.id, hotelId: input.hotelId });
+      const existing = await Favorite.findOne({ user: ctx.user.id, itemId: input.hotelId, itemType: "hotel" });
       if (existing) {
         await Favorite.findByIdAndDelete(existing._id);
         return { isFavorite: false };
       }
-      await Favorite.create({ userId: ctx.user.id, hotelId: input.hotelId });
+      await Favorite.create({ user: ctx.user.id, itemId: input.hotelId, itemType: "hotel" });
       return { isFavorite: true };
     }),
 };

@@ -42,7 +42,7 @@ export class ProcedureBuilder<TCtx extends ORPCContext = ORPCContext> {
   }
 
   use<TNewCtx extends ORPCContext>(fn: (ctx: TCtx) => Promise<TNewCtx> | TNewCtx): ProcedureBuilder<TNewCtx> {
-    return new ProcedureBuilder<TNewCtx>([...this.middlewares, fn as MiddlewareFn]);
+    return new ProcedureBuilder<TNewCtx>([...this.middlewares, fn as unknown as MiddlewareFn]);
   }
 
   input<TInput>(schema: z.ZodType<TInput>) {

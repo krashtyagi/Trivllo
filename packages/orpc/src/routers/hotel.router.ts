@@ -80,8 +80,8 @@ export const hotelRouter = {
       const hotel = await Hotel.create({
         ...input,
         vendorId: ctx.user.id,
-        status: "pending_approval",
-      });
+        verificationStatus: "pending",
+      } as any);
 
       return { success: true, hotel };
     }),

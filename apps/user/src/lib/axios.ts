@@ -1,11 +1,20 @@
 import { userAccessToken } from "@/types/auth";
 import axios from "axios";
 
-const rawBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").trim().replace(/\/+$/, "");
-const baseURL = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
+const getBaseURL = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl) {
+    const raw = envUrl.trim().replace(/\/+$/, "");
+    return raw.endsWith("/api/v1") ? raw : `${raw}/api/v1`;
+  }
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api/v1`;
+  }
+  return "http://localhost:3000/api/v1";
+};
 
 export const axiosApi = axios.create({
-  baseURL,
+  baseURL: getBaseURL(),
   withCredentials: true,
 });
 

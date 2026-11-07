@@ -46,11 +46,11 @@ export const reviewerRouter = {
   submitReview: authProcedure
     .input(CreateReviewSchema)
     .mutation(async ({ input, ctx }) => {
-      const review = await Review.create({
+      const review: any = await Review.create({
         ...input,
         userId: ctx.user.id,
-        status: "pending", // All reviews enter moderation queue
-      });
+        isFlagged: false,
+      } as any);
 
       return { success: true, reviewId: review._id };
     }),
@@ -60,15 +60,15 @@ export const reviewerRouter = {
     .input(ReviewFilterSchema)
     .query(async ({ input }) => {
       const query: Record<string, any> = {};
-      if (input.status) query.status = input.status;
-      if (input.targetType) query.targetType = input.targetType;
-      if (input.targetId) query.targetId = input.targetId;
-      if (input.flaggedOnly) query.status = "flagged_spam";
+      if (input.status) query.isFlagged = input.status === "flagged_spam";
+      if (input.targetType) query.companyType = input.targetType;
+      if (input.targetId) query.companyId = input.targetId;
+      if (input.flaggedOnly) query.isFlagged = true;
 
       const total = await Review.countDocuments(query);
       const reviews = await Review.find(query)
         .populate("userId", "firstName lastName email")
-        .sort({ [input.sortBy]: input.sortOrder === "desc" ? -1 : 1 })
+        .sort({ [input.sortBy || "createdAt"]: input.sortOrder === "desc" ? -1 : 1 })
         .skip((input.page - 1) * input.limit)
         .limit(input.limit)
         .lean();
@@ -87,14 +87,11 @@ export const reviewerRouter = {
   moderateReview: reviewerProcedure
     .input(ModerateReviewSchema)
     .mutation(async ({ input, ctx }) => {
-      const review = await Review.findById(input.reviewId);
+      const review = await Review.findById(input.reviewId) as any;
       if (!review) throw new ORPCError("Review not found", "NOT_FOUND");
 
-      review.status = input.status;
-      review.moderatedBy = ctx.user.id;
-      review.moderatedAt = new Date();
-      if (input.rejectionReason) review.rejectionReason = input.rejectionReason;
-      if (input.moderationNotes) review.moderationNotes = input.moderationNotes;
+      review.isFlagged = input.status === "rejected";
+      if (input.rejectionReason) review.flagReason = input.rejectionReason;
 
       await review.save();
 
@@ -105,23 +102,19 @@ export const reviewerRouter = {
   decidePropertyApproval: reviewerProcedure
     .input(PropertyApprovalDecisionSchema)
     .mutation(async ({ input, ctx }) => {
-      const hotel = await Hotel.findById(input.propertyId);
+      const hotel = await Hotel.findById(input.propertyId) as any;
       if (!hotel) throw new ORPCError("Property not found", "NOT_FOUND");
 
-      const statusMap = {
-        approve: "approved",
+      const statusMap: Record<string, string> = {
+        approve: "verified",
         reject: "rejected",
-        request_changes: "pending_approval",
+        request_changes: "pending",
       };
 
-      hotel.status = statusMap[input.action];
-      hotel.reviewerFeedback = input.feedback;
-      hotel.reviewedBy = ctx.user.id;
-      hotel.reviewedAt = new Date();
-
+      hotel.verificationStatus = statusMap[input.action] || "pending";
       await hotel.save();
 
-      return { success: true, propertyStatus: hotel.status };
+      return { success: true, propertyStatus: hotel.verificationStatus };
     }),
 };
 
